@@ -10,7 +10,7 @@ REM Commit changes to the local repository
 git commit -m "%commitMessage%"
 
 REM Push changes to the remote repository
-git push https://github.com/liuchenyang0703/worktime_system.git main:main
+git push https://github.com/liuchenyang0703/worktime_system.git master:main
 
 REM Display completion message
 echo Commit completed!
