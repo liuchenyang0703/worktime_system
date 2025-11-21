@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8"/>
+    <title>修改密码 - WorkTime</title>
+    <link rel="shortcut icon" href="/static/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/static/css/style.css"/>
+    <style>
+        .panel{width:420px;}
+        /* 密码框眼睛图标样式 */
+        .password-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .password-container input {
+            flex: 1;
+            padding-right: 35px;
+        }
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            opacity: 0.6;
+            user-select: none;
+        }
+        .toggle-password:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="login-body">
+    <div class="panel">
+        <h1>修改登录密码</h1>
+        <form id="pwdForm">
+            <!-- 原密码 -->
+            <div class="password-container">
+                <input type="password" id="old" placeholder="原密码" required>
+                <svg class="toggle-password" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </div>
+            
+            <!-- 新密码 -->
+            <div class="password-container">
+                <input type="password" id="new" placeholder="新密码" required>
+                <svg class="toggle-password" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </div>
+            
+            <!-- 确认新密码 -->
+            <div class="password-container">
+                <input type="password" id="confirm" placeholder="确认新密码" required>
+                <svg class="toggle-password" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </div>
+            
+            <button type="submit">确认修改</button>
+            <p id="error" class="error"></p>
+            <p id="success" class="success"></p>
+        </form>
+        <div class="link">
+            <a id="backLink" href="#">← 返回个人中心</a>
+        </div>
+    </div>
+
+<script>
+/* -------------- 动态返回地址 -------------- */
+(async () => {
+    const info = await fetch('/api/user/info').then(r => r.json());
+    document.getElementById('backLink').href =
+        (info.success && info.role === 'admin') ? '/admin/profile' : '/profile';
+})();
+
+/* -------------- 密码可见性切换 -------------- */
+function setupPasswordToggle(container) {
+    const toggleIcon = container.querySelector('.toggle-password');
+    const passwordInput = container.querySelector('input[type="password"]');
+    
+    toggleIcon.addEventListener('click', () => {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        
+        if (type === 'text') {
+            toggleIcon.innerHTML = `
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+            `;
+        } else {
+            toggleIcon.innerHTML = `
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            `;
+        }
+    });
+}
+
+// 为所有密码容器添加切换功能
+document.querySelectorAll('.password-container').forEach(setupPasswordToggle);
+
+/* -------------- 提交修改 -------------- */
+document.getElementById('pwdForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const oldPwd = document.getElementById('old').value;
+    const newPwd = document.getElementById('new').value;
+    const confirm = document.getElementById('confirm').value;
+
+    if (newPwd !== confirm) {
+        document.getElementById('error').textContent = '两次新密码不一致';
+        return;
+    }
+    if (oldPwd === newPwd) {
+        document.getElementById('error').textContent = '新密码不能与原密码相同';
+        return;
+    }
+
+    const res = await fetch('/api/user/update_pwd', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({old_password: oldPwd, new_password: newPwd})
+    }).then(r => r.json());
+    if (res.success) {
+        document.getElementById('error').textContent = '';
+        document.getElementById('success').textContent = '密码已修改，即将重新登录…';
+        setTimeout(() => location.href = '/logout', 1200);
+    } else {
+        document.getElementById('error').textContent = res.message || '修改失败';
+    }
+});
+</script>
+</body>
+</html>

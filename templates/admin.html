@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8"/>
+  <title>WorkTime 工时统计</title>
+  <link rel="shortcut icon" href="/static/images/favicon.ico" type="image/x-icon">
+  <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  <style>
+    .card{margin:15px 0;padding:15px;border:1px solid #ddd;border-radius:6px;}
+    .filter{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;font-weight:bold;}
+    .filter select{padding:6px 10px;font-size:15px;}
+    .stat-cards{display:flex;gap:24px;margin:24px 0;flex-wrap:wrap;}
+    .stat-card{flex:1 1 150px;border:1px solid #ddd;border-radius:4px;padding:10px;text-align:center;}
+    .stat-card .num{font-size:25px;font-weight:600;color:#0066ff;}
+    .stat-card .label{margin-top:6px;font-size:14px;color:#555;position:relative;}
+    .qmark{margin-left:4px;color:#999;cursor:help;}
+    .qmark .tip{visibility:hidden;position:absolute;left:50%;bottom:125%;transform:translateX(-50%);
+                background:#333;color:#fff;padding:4px 8px;border-radius:4px;white-space:nowrap;font-size:12px;}
+    .qmark:hover .tip{visibility:visible;}
+    table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05);}
+    th,td{padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;}
+    th{background:#f1f5f9;}
+  </style>
+</head>
+<body class="dash-body">
+<header>
+  <span class="logo">WorkTime 管理员后台</span>
+  <div><span>欢迎，{{ user['display_name'] }}</span><a href="/logout" class="logout">退出</a></div>
+</header>
+
+<div class="main">
+  <aside>
+    <button onclick="location.href='/admin'" class="primary">工时统计</button>
+    <button onclick="location.href='/admin/users'" class="primary">用户管理</button>
+    <button onclick="location.href='/admin/profile'">个人中心</button>
+  </aside>
+
+  <section class="content">
+    <div class="card">
+      <h3>工时统计</h3>
+      <div class="filter">
+        <label>选择用户
+          <select id="userSelect" onchange="onUserChange()"></select>
+        </label>
+        <label>开始 <input type="date" id="start" max=""></label>
+        <label>结束 <input type="date" id="end"   max=""></label>
+        <button class="btn primary" onclick="loadStats()">查询统计</button>
+      </div>
+
+      <div class="stat-cards">
+        <div class="stat-card"><div class="num" id="avgInTime">-</div><div class="label">平均上班时间</div></div>
+        <div class="stat-card"><div class="num" id="avgOutTime">-</div><div class="label">平均下班时间</div></div>
+        <div class="stat-card"><div class="num" id="avgDay">-</div><div class="label">日平均工时</div></div>
+        <div class="stat-card">
+          <div class="num" id="avgWeek">-</div>
+          <div class="label">周总工时
+            <span class="qmark">?<span class="tip">跨周时自动显示当前自然周总工时</span></span>
+          </div>
+        </div>
+      </div>
+
+      <table id="recordsTable">
+        <thead><tr><th>日期</th><th>上班</th><th>下班</th><th>工时</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ========== 工具 ========== */
+function fmtHourMin(min){ if(!min&&min!==0)return'-'; const h=Math.floor(min/60),m=min%60; return `${h}小时${m}分钟`; }
+function timeToMin(t){ if(!t)return 0; const p=t.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }
+function minToTime(m){ const h=Math.floor(m/60),mm=m%60; return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;}
+function fmtDate(d){ const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; }
+
+/* ========== 初始化 ========== */
+const TODAY_STR=fmtDate(new Date());
+window.onload=async()=>{
+  const list=await fetch('/api/users').then(r=>r.json());
+  const sel=document.getElementById('userSelect');
+  sel.innerHTML='';
+  sel.add(new Option('请选择用户',''));
+  list.forEach(u=>sel.add(new Option(u.name,u.id)));
+  fillDefaultDate();
+};
+
+function fillDefaultDate(){
+  const day=new Date().getDay()||7;
+  const mon=new Date(); mon.setDate(new Date().getDate()-day+1);
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  document.getElementById('start').value=fmtDate(mon);
+  document.getElementById('end').value=fmtDate(sun);
+  ['start','end'].forEach(id=>document.getElementById(id).max=TODAY_STR);
+}
+
+/* ========== 用户切换：自动加载本周 ========== */
+async function onUserChange(){
+  const uid=document.getElementById('userSelect').value;
+  if(!uid)return;
+  fillDefaultDate();          // 归位本周
+  await loadStats();          // 立即查询
+}
+
+/* ========== 查询统计 ========== */
+async function loadStats(){
+  const uid=document.getElementById('userSelect').value;
+  if(!uid){alert('请选择用户');return;}
+  const start=document.getElementById('start').value;
+  const end=document.getElementById('end').value;
+  const data=await fetch(`/records?user_id=${uid}&start=${start}&end=${end}`).then(r=>r.json());
+
+  const tbody=document.querySelector('#recordsTable tbody');
+  tbody.innerHTML='';
+
+  let inT=0,inC=0,outT=0,outC=0,totalMin=0,validDays=0;
+
+  data.forEach(r=>{
+    const min=Math.round((r.work_hours||0)*60);
+    const dateStr=fmtDate(new Date(r.date));
+    tbody.insertAdjacentHTML('beforeend',
+      `<tr><td>${dateStr}</td><td>${r.clock_in||'-'}</td><td>${r.clock_out||'-'}</td><td>${min?fmtHourMin(min):'-'}</td></tr>`);
+    if(min){totalMin+=min;validDays++;}
+    if(r.clock_in){inT+=timeToMin(r.clock_in);inC++;}
+    if(r.clock_out){outT+=timeToMin(r.clock_out);outC++;}
+  });
+
+  const avgIn=inC?minToTime(Math.round(inT/inC)):'-';
+  const avgOut=outC?minToTime(Math.round(outT/outC)):'-';
+  const avgDay=validDays?Math.round(totalMin/validDays):0;
+
+  /* ---- 周总时长：跨周→用当前自然周汇总 ---- */
+  function getWeek(d){d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));return Math.ceil(((d-y)/86400000+1)/7);}
+  function sameWeek(d1,d2){return d1.getFullYear()===d2.getFullYear()&&getWeek(d1)===getWeek(d2);}
+  let weekTotal;
+  if(!sameWeek(new Date(start),new Date(end))){
+    // 跨周：取「当前自然周」总时长（带上用户ID）
+    const wk=await fetch(`/week_summary?user_id=${uid}`).then(r=>r.json());
+    weekTotal=Math.round((Number(wk.week_total)||0)*60);
+  }else{
+    // 未跨周：结束在周五~周日用区间合计，否则仍用当前完整周
+    const endDay=new Date(end).getDay();
+    if(endDay===5||endDay===6||endDay===0){
+      weekTotal=Math.round(totalMin);
+    }else{
+      const wk=await fetch(`/week_summary?user_id=${uid}`).then(r=>r.json());
+      weekTotal=Math.round((Number(wk.week_total)||0)*60);
+    }
+  }
+
+  document.getElementById('avgInTime').textContent=avgIn;
+  document.getElementById('avgOutTime').textContent=avgOut;
+  document.getElementById('avgDay').textContent=fmtHourMin(avgDay);
+  document.getElementById('avgWeek').textContent=fmtHourMin(weekTotal);
+}
+</script>
+</body>
+</html>

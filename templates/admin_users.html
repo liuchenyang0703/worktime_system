@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8"/>
+  <title>用户管理 - WorkTime</title>
+    <link rel="shortcut icon" href="/static/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/static/css/style.css"/>
+  <style>
+    /* ===== 样式同上一版 ===== */
+    table{width:100%;border-collapse:collapse;margin-top:15px;}
+    th,td{padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;}
+    th{background:#f1f5f9;}
+    .btn-danger{background:#e53e3e;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;}
+    .btn-danger:hover{background:#c53030;}
+    .btn-danger-disabled{background:#ccc;color:#666;border:none;padding:6px 14px;border-radius:4px;cursor:not-allowed;}
+    #toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#e53e3e;color:#fff;padding:10px 20px;border-radius:4px;opacity:0;transition:opacity .5s;z-index:9999;}
+    /* 模态框样式略，与之前相同 */
+    .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9999;}
+    .modal-panel{background:#fff;border-radius:8px;width:360px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,.2);}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+    .modal-title{font-size:16px;font-weight:600;}
+    .modal-close{cursor:pointer;font-size:20px;color:#666;}
+    .modal-body{display:flex;align-items:center;gap:12px;margin-bottom:20px;}
+    .modal-icon{width:40px;height:40px;background:#fee;border-radius:50%;display:grid;place-content:center;color:#e53e3e;font-size:22px;}
+    .modal-footer{display:flex;justify-content:flex-end;gap:10px;}
+    .modal-footer button{padding:6px 16px;border:none;border-radius:4px;cursor:pointer;}
+    .modal-cancel{background:#f5f5f5;color:#333;}
+    .modal-confirm{background:#e53e3e;color:#fff;}
+  </style>
+</head>
+<body class="dash-body">
+<header>
+  <span class="logo">WorkTime 管理员后台</span>
+  <div><span>欢迎，{{ user['display_name'] }}</span><a href="/logout" class="logout">退出</a></div>
+</header>
+
+<div class="main">
+  <aside>
+    <button onclick="location.href='/admin'">工时统计</button>
+    <button onclick="location.href='/admin/users'" class="primary">用户管理</button>
+    <button onclick="location.href='/admin/profile'">个人中心</button>
+  </aside>
+
+  <section class="content">
+    <h3>全部用户</h3>
+    <table id="userTable">
+      <thead><tr><th>ID</th><th>显示名</th><th>账号</th><th>角色</th><th>操作</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</div>
+
+<!-- 删除成功提示 -->
+<div id="toast">已删除</div>
+
+<!-- 确认删除模态框 -->
+<div class="modal-mask" id="delModal">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <div class="modal-title">确认删除</div>
+      <span class="modal-close" onclick="closeDelModal()">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="modal-icon">⚠</div>
+      <div>
+        <div>确定删除用户「<strong id="delUserName"></strong>」？</div>
+        <div style="font-size:12px;color:#666;margin-top:4px;">该操作会同步删除其全部打卡记录，且不可恢复！</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-cancel" onclick="closeDelModal()">取消</button>
+      <button class="modal-confirm" onclick="confirmDel()">删除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 当前登录用户 id（字符串） ===== */
+const currentUserId = "{{ user['id'] }}";  // Jinja 渲染，转字符串
+
+let delUid = null;   // 待删除用户ID
+
+async function loadUsers(){
+  const data = await fetch('/api/all_users').then(r=>r.json());
+  const tb = document.querySelector('#userTable tbody');
+  tb.innerHTML = '';
+  data.forEach(u=>{
+    const tr = document.createElement('tr');
+    const btn = document.createElement('button');
+    btn.textContent = u.role === 'admin' ? '删除' : '删除';
+    btn.className = u.role === 'admin' ? 'btn-danger-disabled' : 'btn-danger';
+    if (u.role !== 'admin') btn.onclick = () => openDelModal(u.id, u.display_name);
+    tr.innerHTML = `<td>${u.id}</td><td>${u.display_name}</td><td>${u.username}</td><td>${u.role}</td><td></td>`;
+    tr.querySelector('td:last-child').appendChild(btn);
+    tb.appendChild(tr);
+  });
+}
+
+/* 顶部淡入/淡出提示 */
+function toast(text){
+    const toast = document.getElementById('toast');
+    toast.textContent = text;
+    toast.style.display = 'block';
+    requestAnimationFrame(()=>toast.style.opacity = 1);
+    setTimeout(()=>{
+        toast.style.opacity = 0;
+        setTimeout(()=>toast.style.display='none', 500);
+    }, 1500);
+}
+
+/* 模态框控制 */
+function openDelModal(uid, name){
+  delUid = uid;
+  document.getElementById('delUserName').textContent = name;
+  document.getElementById('delModal').style.display = 'flex';
+}
+function closeDelModal(){
+  document.getElementById('delModal').style.display = 'none';
+  delUid = null;
+}
+
+async function confirmDel(){
+  if (!delUid) return;
+  const res = await fetch(`/api/user/delete/${delUid}`, {method:'POST'});
+  const js = await res.json();
+  if (js.success) {
+      toast('已删除');
+      loadUsers();               // 刷新列表
+      /* 若删的是自己，立即踢出 */
+      if (String(js.deleted_id) === currentUserId) {
+          setTimeout(() => location.href = '/logout', 800); // 给 toast 一点消失时间
+      }
+  } else {
+      alert('失败：'+js.message);
+  }
+  closeDelModal();
+}
+
+loadUsers();
+</script>
+</body>
+</html>

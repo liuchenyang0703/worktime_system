@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8"/>
+    <title>个人中心 - WorkTime</title>
+    <link rel="shortcut icon" href="/static/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/static/css/style.css"/>
+    <style>
+        .card{max-width:480px;margin:40px auto;}
+        .row{margin:12px 0;display:flex;align-items:center;}
+        .row label{width:100px;font-weight:bold;}
+        .row span{flex:1;}
+        .btn-group{margin-top:20px;display:flex;gap:12px;}
+    </style>
+</head>
+<body class="dash-body">
+<header>
+    <span class="logo">WorkTime 管理员后台</span>
+    <div>
+        <span>欢迎，{{ user['display_name'] }}</span>
+        <a href="/logout" class="logout">退出</a>
+    </div>
+</header>
+
+<div class="main">
+    <aside>
+        <button onclick="location.href='/dashboard#stats'">工时统计</button>
+        <button onclick="location.href='/admin/users'" class="primary">用户管理</button>
+        <button onclick="location.href='/admin/profile'" class="primary">个人中心</button>
+    </aside>
+
+    <section class="content">
+        <div class="card">
+            <h3>个人中心</h3>
+            <div class="row">
+                <label>用户名</label>
+                <span id="displayName">-</span>
+            </div>
+            <div class="row">
+                <label>用户类型</label>
+                <span id="userRole">-</span>
+            </div>
+            <div class="row">
+                <label>登录账号</label>
+                <span id="username">-</span>
+            </div>
+            <div class="row">
+                <label>登录密码</label>
+                <span>********</span>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn primary" onclick="editName()">修改用户名</button>
+                <button class="btn secondary" onclick="location.href='/change_pwd'">修改密码</button>
+            </div>
+            <p id="tip" class="success" style="margin-top:15px;"></p>
+        </div>
+    </section>
+</div>
+
+<script>
+/* 页面加载时拉取信息 */
+window.onload = async () => {
+    const r = await fetch('/api/user/info').then(res => res.json());
+    if (r.success) {
+        document.getElementById('displayName').textContent = r.display_name;
+        document.getElementById('username').textContent = r.username;
+        // 新增：角色转中文
+        document.getElementById('userRole').textContent = r.role === 'admin' ? '管理员' : '普通用户';
+    }
+};
+
+/* 修改用户名（简单 prompt 版） */
+async function editName() {
+    const newName = prompt('请输入新的用户名：', document.getElementById('displayName').textContent);
+    if (!newName || newName.trim() === '') return;
+    const res = await fetch('/api/user/update_name', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({display_name: newName.trim()})
+    }).then(r => r.json());
+    if (res.success) {
+        document.getElementById('displayName').textContent = newName.trim();
+        document.getElementById('tip').textContent = '用户名已更新';
+    } else {
+        alert(res.message || '更新失败');
+    }
+}
+</script>
+</body>
+</html>

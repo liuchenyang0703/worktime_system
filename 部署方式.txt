@@ -1,0 +1,30 @@
+######################################### 宿主机部署 #########################################
+# 安装python3
+
+# 安装模块
+pip3 install flask pymysql captcha python-dateutil -i https://mirrors.aliyun.com/pypi/simple/
+
+# 运行
+nohup python3 worktime.py &
+# 默认端口5100
+
+
+########################################## 容器部署 ##########################################
+# 安装docker
+
+# 拉取镜像
+docker pull liuchenyang/ubuntu20.04:latest
+
+# 创建容器
+docker run -itd --name lcy-project --restart=always --network=host -v /home/lcy/lcy-project/:/home/ -v /etc/localtime:/etc/localtime ubuntu20.04:latest
+
+# 进入容器安装python3
+apt-get update -y 
+apt -y install python3-pip
+
+# 安装模块
+pip3 install flask pymysql captcha python-dateutil -i https://mirrors.aliyun.com/pypi/simple/
+
+# 运行
+nohup python3 worktime.py &
+# 默认端口5100

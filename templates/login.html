@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8"/>
+    <title>登录 - WorkTime</title>
+    <link rel="shortcut icon" href="/static/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/static/css/style.css"/>
+    <style>
+        .password-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .password-container input {
+            flex: 1;
+            padding-right: 35px;
+        }
+        
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            opacity: 0.6;
+            user-select: none;
+        }
+        
+        .toggle-password:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="login-body">
+    <div class="panel">
+        <h1>WorkTime</h1>
+        <h2>登录</h2>
+        <form id="loginForm">
+            <input type="text" id="username" placeholder="登录账号" required autofocus>
+            
+            <!-- 密码输入框带眼睛图标 -->
+            <div class="password-container">
+                <input type="password" id="password" placeholder="登录密码" required>
+                <svg class="toggle-password" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </div>
+
+            <!-- 验证码 -->
+            <div class="captcha-row">
+                <input type="text" id="captcha" placeholder="验证码" maxlength="4" required>
+                <img id="captchaImg" src="/captcha" alt="验证码" onclick="this.src='/captcha?' + Date.now()">
+            </div>
+
+            <button type="submit">登录</button>
+            <p id="error" class="error"></p>
+        </form>
+        <div class="link">
+            还没有账号？<a href="/register">立即注册</a> |
+            <a href="/reset_pwd">忘记密码？</a>
+        </div>
+    </div>
+
+    <script>
+        // 密码可见性切换
+        const togglePassword = document.querySelector('.toggle-password');
+        const passwordInput = document.getElementById('password');
+        
+        togglePassword.addEventListener('click', () => {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            
+            // 切换图标样式（睁眼/闭眼）
+            if (type === 'text') {
+                togglePassword.innerHTML = `
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                `;
+            } else {
+                togglePassword.innerHTML = `
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                `;
+            }
+        });
+
+        // 登录表单提交
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: document.getElementById('username').value,
+                    password: document.getElementById('password').value,
+                    captcha: document.getElementById('captcha').value
+                })
+            });
+            const data = await res.json();
+            if (data.success) location.href = '/dashboard';
+            else {
+                document.getElementById('error').textContent = data.message;
+                // 刷新验证码
+                document.getElementById('captchaImg').src = '/captcha?' + Date.now();
+            }
+        });
+    </script>
+</body>
+</html>
